@@ -1,0 +1,18 @@
+[package]
+name = "uber-driver"
+version = "0.1.0"
+edition = "2021"
+authors = ["Judge Maygarden <judge@jmaygarden.com>"]
+description = "Prototype for running multiple Lua coroutines"
+
+[workspace]
+members = ["uber-protos", "uber-client", "uber-server"]
+
+[dependencies]
+argh = "0.1"
+env_logger = "0.9"
+log = "0.4"
+mlua = { version = "0.7", features = ["lua54"] }
+tokio = { version = "1", features = ["macros", "rt"] }
+uber-client = { path = "./uber-client" }
+uber-server = { path = "./uber-server" }

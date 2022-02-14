@@ -1,0 +1,22 @@
+syntax = "proto3";
+
+package uber;
+
+service Driver {
+	rpc StartDriver(StartDriverRequest) returns (DriverResponse) {}
+	rpc StopDriver(StopDriverRequest) returns (DriverResponse) {}
+}
+
+message StartDriverRequest {
+	string driver_id = 1;
+	bytes payload = 2;
+}
+
+message StopDriverRequest {
+	string driver_id = 1;
+}
+
+message DriverResponse {
+	string driver_id = 1;
+	optional string error = 2;
+}
