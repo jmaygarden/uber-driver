@@ -1,20 +1,18 @@
 use crate::UberServerError;
 use mlua::{FromLua, ToLua, ToLuaMulti};
-use std::{collections::HashMap, process::Output, rc::Rc, time::Duration};
-use tokio::{process::Command, sync::Notify};
+use std::{process::Output, rc::Rc, time::Duration};
+use tokio::process::Command;
 use uber_protos::DriverResponse;
 
 const REGISTRY_COROUTINES: &str = "REGISTRY_COROUTINES";
 const REGISTRY_SANDBOX: &str = "REGISTRY_SANDBOX";
 
 pub struct Executor {
-    coroutines: HashMap<String, Rc<Notify>>,
     lua: Rc<mlua::Lua>,
 }
 
 impl Executor {
     pub fn new() -> Result<Self, UberServerError> {
-        let coroutines = HashMap::new();
         let lua = Rc::new(unsafe { mlua::Lua::unsafe_new() });
 
         let table = lua.create_table()?;
@@ -50,7 +48,7 @@ impl Executor {
             .eval::<mlua::Table>()?;
         lua.set_named_registry_value(REGISTRY_SANDBOX, table)?;
 
-        Ok(Self { coroutines, lua })
+        Ok(Self { lua })
     }
 
     pub fn create_coroutine(
@@ -60,23 +58,21 @@ impl Executor {
     ) -> Result<(), UberServerError> {
         store_thread(self.lua.clone(), driver_id.as_str(), &bytecode)?;
 
-        let notify = Rc::new(Notify::new());
-
-        self.coroutines.insert(driver_id.clone(), notify.clone());
-
         tokio::task::spawn_local(spawn_thread(self.lua.clone(), driver_id));
 
         Ok(())
     }
 
     pub fn kill_coroutine(&mut self, driver_id: String) -> DriverResponse {
-        let error = match self.coroutines.remove(driver_id.as_str()) {
-            Some(notify) => {
-                notify.notify_one();
+        let lua = self.lua.clone();
+        let result = load_thread(&self.lua, driver_id.as_str()).and_then(|thread| {
+            let function = lua.create_function(|_, _: ()| Ok(()))?;
 
-                None
-            }
-            None => Some(format!("Driver `{driver_id}` not found.")),
+            thread.reset(function).map_err(UberServerError::LuaError)
+        });
+        let error = match result {
+            Ok(()) => None,
+            Err(error) => Some(error.to_string()),
         };
 
         DriverResponse { driver_id, error }
@@ -178,7 +174,11 @@ async fn spawn_thread(lua: Rc<mlua::Lua>, driver_id: String) {
                 }
             }
             Err(error) => {
-                log::error!("{driver_id}: {error}");
+                if let mlua::ThreadStatus::Resumable = thread.status() {
+                    log::error!("{driver_id}: {error}");
+                } else {
+                    log::info!("{driver_id}: TERMINATED");
+                }
             }
         }
     }

@@ -12,7 +12,8 @@ struct Args {
 #[argh(subcommand)]
 enum Command {
     Serve(ServeCommand),
-    Run(RunCommand),
+    Start(StartCommand),
+    Stop(StopCommand),
 }
 
 #[derive(Debug, FromArgs)]
@@ -26,12 +27,23 @@ struct ServeCommand {}
 #[derive(Debug, FromArgs)]
 #[argh(
     subcommand,
-    name = "run",
-    description = "run a Lua script as a coroutine on a server"
+    name = "start",
+    description = "start a Lua script as a coroutine on a server"
 )]
-struct RunCommand {
+struct StartCommand {
     #[argh(positional)]
     path: PathBuf,
+}
+
+#[derive(Debug, FromArgs)]
+#[argh(
+    subcommand,
+    name = "stop",
+    description = "stop a Lua script with the given identifier"
+)]
+struct StopCommand {
+    #[argh(positional)]
+    driver_id: String,
 }
 
 #[tokio::main]
@@ -43,6 +55,7 @@ async fn main() {
 
     match args.command {
         Command::Serve(_arg) => uber_server::serve().await.unwrap(),
-        Command::Run(arg) => uber_client::run(arg.path.as_path()).await.unwrap(),
+        Command::Start(arg) => uber_client::start(arg.path.as_path()).await.unwrap(),
+        Command::Stop(arg) => uber_client::stop(arg.driver_id).await.unwrap(),
     }
 }
