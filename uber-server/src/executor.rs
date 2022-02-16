@@ -1,7 +1,7 @@
 use crate::UberServerError;
-use mlua::FromLua;
-use std::{collections::HashMap, rc::Rc, time::Duration};
-use tokio::sync::Notify;
+use mlua::{FromLua, ToLua, ToLuaMulti};
+use std::{collections::HashMap, process::Output, rc::Rc, time::Duration};
+use tokio::{process::Command, sync::Notify};
 use uber_protos::DriverResponse;
 
 const REGISTRY_COROUTINES: &str = "REGISTRY_COROUTINES";
@@ -25,19 +25,24 @@ impl Executor {
                 local REQUEST_NOOP = 0
                 local REQUEST_PRINT = 1
                 local REQUEST_SLEEP = 2
+                local REQUEST_GETDATE = 3
 
                 function noop()
                     coroutine.yield(REQUEST_NOOP)
                 end
 
                 function print(...)
-                    local msg = string.format(...)
+                    local msg = table.concat({...}, "\t")
 
                     coroutine.yield(REQUEST_PRINT, msg)
                 end
 
                 function sleep(duration)
                     coroutine.yield(REQUEST_SLEEP, duration)
+                end
+
+                function get_date()
+                    return coroutine.yield(REQUEST_GETDATE)
                 end
 
                 return { __index = _G }
@@ -118,10 +123,11 @@ async fn spawn_thread(lua: Rc<mlua::Lua>, driver_id: String) {
         }
     };
 
-    let args = mlua::MultiValue::new();
+    let nil = mlua::MultiValue::new();
+    let mut args = Some(nil.clone());
 
     while let mlua::ThreadStatus::Resumable = thread.status() {
-        match thread.resume::<_, AsyncRequest>(args.clone()) {
+        match thread.resume::<_, AsyncRequest>(args.take().unwrap_or(nil.clone())) {
             Ok(request) => {
                 log::debug!("{driver_id}: {request:?}");
 
@@ -132,6 +138,43 @@ async fn spawn_thread(lua: Rc<mlua::Lua>, driver_id: String) {
                         tokio::task::yield_now().await;
                     }
                     AsyncRequest::Sleep(duration) => tokio::time::sleep(duration).await,
+                    AsyncRequest::GetDate => {
+                        let result = Command::new("date")
+                            .output()
+                            .await
+                            .map_err(UberServerError::IoError)
+                            .and_then(
+                                |Output {
+                                     status,
+                                     stdout,
+                                     stderr,
+                                 }| {
+                                    let table = lua.create_table()?;
+                                    table.set("status", status.to_string())?;
+                                    table.set("stdout", String::from_utf8(stdout)?)?;
+                                    table.set("stderr", String::from_utf8(stderr)?)?;
+
+                                    let value = table.to_lua_multi(&lua)?;
+
+                                    Ok(value)
+                                },
+                            )
+                            .map_err(|err| {
+                                let values = vec![
+                                    mlua::Value::Nil,
+                                    err.to_string()
+                                        .to_lua(&lua)
+                                        .unwrap_or_else(|error| mlua::Value::Error(error)),
+                                ];
+
+                                mlua::MultiValue::from_vec(values)
+                            });
+
+                        args.replace(match result {
+                            Ok(value) => value,
+                            Err(value) => value,
+                        });
+                    }
                 }
             }
             Err(error) => {
@@ -146,6 +189,7 @@ enum AsyncRequest {
     NoOp,
     Print(String),
     Sleep(Duration),
+    GetDate,
 }
 
 impl<'lua> mlua::FromLuaMulti<'lua> for AsyncRequest {
@@ -174,6 +218,7 @@ impl<'lua> mlua::FromLuaMulti<'lua> for AsyncRequest {
 
                 Ok(AsyncRequest::Sleep(Duration::from_secs_f64(secs)))
             }
+            3 => Ok(AsyncRequest::GetDate),
             _ => {
                 return Err(mlua::Error::RuntimeError(format!(
                     "invalid opcode: {opcode}"

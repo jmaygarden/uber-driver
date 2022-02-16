@@ -5,6 +5,8 @@ use uber_protos::driver_server::DriverServer;
 
 #[derive(Debug, Error)]
 pub enum UberServerError {
+    #[error("UTF-8 codec error: {0}")]
+    FromUtf8Error(#[from] std::string::FromUtf8Error),
     #[error("I/O error: {0}")]
     IoError(#[from] std::io::Error),
     #[error("Lua error: {0}")]
