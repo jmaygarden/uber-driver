@@ -16,12 +16,14 @@ pub enum UberServerError {
 }
 
 pub async fn serve() -> Result<(), UberServerError> {
+    let log_subscriber = crate::logger::init();
+
     let local_set = LocalSet::new();
 
     local_set
         .run_until(async move {
             let incoming = Listener::new()?;
-            let service = Service::new()?;
+            let service = Service::new(log_subscriber)?;
 
             log::info!("starting service");
 
@@ -37,5 +39,6 @@ pub async fn serve() -> Result<(), UberServerError> {
 
 mod executor;
 mod listener;
+mod logger;
 mod service;
 mod unixstream;

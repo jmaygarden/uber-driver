@@ -5,6 +5,7 @@ edition = "2021"
 build = "build.rs"
 
 [dependencies]
+log = "0.4"
 prost = "0.9"
 tonic = { version = "0.6" }
 

@@ -10,7 +10,6 @@ members = ["uber-protos", "uber-client", "uber-server"]
 
 [dependencies]
 argh = "0.1"
-env_logger = "0.9"
 log = "0.4"
 mlua = { version = "0.7", features = ["lua54"] }
 tokio = { version = "1", features = ["macros", "rt"] }

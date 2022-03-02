@@ -1,10 +1,13 @@
 syntax = "proto3";
 
+import "google/protobuf/empty.proto";
+
 package uber;
 
 service Driver {
-	rpc StartDriver(StartDriverRequest) returns (DriverResponse) {}
-	rpc StopDriver(StopDriverRequest) returns (DriverResponse) {}
+	rpc StartDriver(StartDriverRequest) returns (DriverResponse) {};
+	rpc StopDriver(StopDriverRequest) returns (DriverResponse) {};
+	rpc LogEvents(google.protobuf.Empty) returns (stream LogEvent) {};
 }
 
 message StartDriverRequest {
@@ -19,4 +22,18 @@ message StopDriverRequest {
 message DriverResponse {
 	string driver_id = 1;
 	optional string error = 2;
+}
+
+enum LogLevel {
+	ERROR = 0;
+    WARN = 1;
+    INFO = 2;
+    DEBUG = 3;
+    TRACE = 4;
+}
+
+message LogEvent {
+	LogLevel level = 1;
+	string target = 2;
+	string message = 3;
 }

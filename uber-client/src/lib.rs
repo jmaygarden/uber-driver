@@ -54,7 +54,27 @@ async fn load_script(path: &Path) -> Result<Vec<u8>, UberClientError> {
     Ok(bytecode)
 }
 
+pub async fn listen() -> Result<(), UberClientError> {
+    env_logger::init();
+
+    let channel = tonic::transport::Endpoint::from_static(UDS_URI)
+        .connect_with_connector(service_fn(|_| UnixStream::connect(UDS_PATH)))
+        .await?;
+    let mut client = DriverClient::new(channel);
+    let mut stream = client.log_events(()).await?.into_inner();
+
+    while let Some(message) = stream.message().await? {
+        let level = log::Level::from(message.level());
+        let target = message.target.as_str();
+
+        log::log!(target: target, level, "{}", message.message);
+    }
+
+    Ok(())
+}
+
 pub async fn start(path: &Path) -> Result<(), UberClientError> {
+    env_logger::init();
     log::info!("start script {path:?}");
     let channel = tonic::transport::Endpoint::from_static(UDS_URI)
         .connect_with_connector(service_fn(|_| UnixStream::connect(UDS_PATH)))
@@ -71,6 +91,7 @@ pub async fn start(path: &Path) -> Result<(), UberClientError> {
 }
 
 pub async fn stop(driver_id: String) -> Result<(), UberClientError> {
+    env_logger::init();
     log::info!("stop script {driver_id}");
     let channel = tonic::transport::Endpoint::from_static(UDS_URI)
         .connect_with_connector(service_fn(|_| UnixStream::connect(UDS_PATH)))

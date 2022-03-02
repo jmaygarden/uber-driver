@@ -125,7 +125,7 @@ async fn spawn_thread(lua: Rc<mlua::Lua>, driver_id: String) {
     while let mlua::ThreadStatus::Resumable = thread.status() {
         match thread.resume::<_, AsyncRequest>(args.take().unwrap_or(nil.clone())) {
             Ok(request) => {
-                log::debug!("{driver_id}: {request:?}");
+                log::info!("{driver_id}: {request:?}");
 
                 match request {
                     AsyncRequest::NoOp => tokio::task::yield_now().await,
