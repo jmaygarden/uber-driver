@@ -8,6 +8,7 @@ service Driver {
 	rpc StartDriver(StartDriverRequest) returns (DriverResponse) {};
 	rpc StopDriver(StopDriverRequest) returns (DriverResponse) {};
 	rpc LogEvents(google.protobuf.Empty) returns (stream LogEvent) {};
+	rpc Echo(EchoRequest) returns (EchoResponse) {};
 }
 
 message StartDriverRequest {
@@ -36,4 +37,12 @@ message LogEvent {
 	LogLevel level = 1;
 	string target = 2;
 	string message = 3;
+}
+
+message EchoRequest {
+	string message = 1;
+}
+
+message EchoResponse {
+	string message = 1;
 }

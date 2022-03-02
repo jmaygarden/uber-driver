@@ -1,11 +1,16 @@
-use std::path::Path;
+use std::{
+    path::Path,
+    time::{Duration, Instant},
+};
 use thiserror::Error;
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
     net::UnixStream,
 };
 use tower::service_fn;
-use uber_protos::{driver_client::DriverClient, StartDriverRequest, StopDriverRequest};
+use uber_protos::{
+    driver_client::DriverClient, EchoRequest, StartDriverRequest, StopDriverRequest,
+};
 
 const UDS_PATH: &str = "/tmp/uber-driver.sock";
 const UDS_URI: &str = "http://tmp/uber-driver.sock";
@@ -60,6 +65,26 @@ pub async fn listen() -> Result<(), UberClientError> {
     let channel = tonic::transport::Endpoint::from_static(UDS_URI)
         .connect_with_connector(service_fn(|_| UnixStream::connect(UDS_PATH)))
         .await?;
+
+    {
+        let channel = channel.clone();
+
+        tokio::spawn(async move {
+            let mut client = DriverClient::new(channel);
+            let timer = Instant::now();
+
+            while let Ok(response) = client
+                .echo(EchoRequest {
+                    message: timer.elapsed().as_secs().to_string(),
+                })
+                .await
+            {
+                log::info!("echo: {response:?}");
+                tokio::time::sleep(Duration::from_secs(5)).await;
+            }
+        });
+    }
+
     let mut client = DriverClient::new(channel);
     let mut stream = client.log_events(()).await?.into_inner();
 

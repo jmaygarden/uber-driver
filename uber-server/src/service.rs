@@ -3,7 +3,8 @@ use futures_core::Stream;
 use std::pin::Pin;
 use tokio::sync::{mpsc, Mutex};
 use uber_protos::{
-    driver_server::Driver, DriverResponse, LogEvent, StartDriverRequest, StopDriverRequest,
+    driver_server::Driver, DriverResponse, EchoRequest, EchoResponse, LogEvent, StartDriverRequest,
+    StopDriverRequest,
 };
 
 pub type LogSender = mpsc::UnboundedSender<Result<LogEvent, tonic::Status>>;
@@ -127,5 +128,17 @@ impl Driver for Service {
         self.send(ExecutorRequest::Log(tx)).await?;
 
         Ok(tonic::Response::new(Box::pin(rx)))
+    }
+
+    async fn echo(
+        &self,
+        request: tonic::Request<EchoRequest>,
+    ) -> Result<tonic::Response<EchoResponse>, tonic::Status> {
+        log::info!("echo {request:?}");
+
+        let EchoRequest { message } = request.into_inner();
+        let response = EchoResponse { message };
+
+        Ok(tonic::Response::new(response))
     }
 }
